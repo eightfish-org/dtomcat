@@ -9,21 +9,28 @@ use std::thread;
 
 const CHANNEL_VIN2WORKER: &str = "vin2worker";
 
+// #[derive(Debug, Serialize, Deserialize)]
+// enum EventType {
+//     UploadWasmFile,
+//     DoUpgrade,
+// }
+
 #[derive(Debug, Serialize, Deserialize)]
-enum EventType {
-    UploadWasmFile,
-    DoUpgrade,
+struct Info {
+    proto: String,
+    version: String,
+    digest: String,
+    afterblocks: usize,
+    timestamp: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Message {
-    id: u64,
-    eventtype: EventType,
-    proto_id: String,
-    proto_version: String,
-    digest: String,
-    body: Vec<u8>,
-    timestamp: i64,
+pub struct InputOutputObject {
+    proto: String,
+    model: String,
+    action: String,
+    data: Vec<u8>,
+    ext: Vec<u8>,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -40,7 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let msg = pubsub.get_message()?;
         let payload: String = msg.get_payload()?;
 
-        match serde_json::from_str::<Message>(&payload) {
+        match serde_json::from_str::<InputOutputObject>(&payload) {
             Ok(message) => {
                 println!("Received message: {:?}", message);
                 process_message(message)?;
@@ -53,27 +60,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn process_message(msg: Message) -> Result<(), Box<dyn Error>> {
+fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
     println!("Processing message:");
-    println!("ID: {}", msg.id);
-    println!("Timestamp: {}", msg.timestamp);
 
-    match msg.eventtype {
-        EventType::UploadWasmFile => {
-            let body = &msg.body;
+    let info: Info = serde_json::from_str(&msg.model)?;
+
+    match &msg.action[..] {
+        "upload_wasmfile" => {
+            let body = &msg.data;
             // check the digest of body
             // if msg.digest != sha256_check(body) {}
 
             // generate a new wasm binary file
-            let path = format!(
-                "proto_wasm_files/{}-v{}.wasm",
-                msg.proto_id, msg.proto_version
-            );
+            let path = format!("proto_wasm_files/{}-v{}.wasm", info.proto, info.version);
             // Write the result to a new file
             let mut output_file = fs::File::create(path)?;
             output_file.write_all(body)?;
         }
-        EventType::DoUpgrade => {
+        "do_upgrade" => {
             // TODO: check whether the existence of the corresponding wasm file
             // if doesn't exist, return early
 
@@ -81,8 +85,8 @@ fn process_message(msg: Message) -> Result<(), Box<dyn Error>> {
             let template = fs::read_to_string("spin_tmpl.txt")?;
 
             // this id will be received from the redis
-            let proto_id = &msg.proto_id;
-            let proto_version = &msg.proto_version;
+            let proto_id = &info.proto;
+            let proto_version = &info.version;
             // Define the replacements
             let replacements = [("$proto_id", proto_id), ("$proto_version", proto_version)];
 
@@ -109,12 +113,12 @@ fn process_message(msg: Message) -> Result<(), Box<dyn Error>> {
             // spawn new spin instance
             let mut env_vars = HashMap::new();
             env_vars.insert("SPIN_VARIABLE_REDIS_HOST".to_string(), redis_host.clone());
-            env_vars.insert("SPIN_VARIABLE_PROTO_ID".to_string(), msg.proto_id.clone());
+            env_vars.insert("SPIN_VARIABLE_PROTO_ID".to_string(), msg.proto.clone());
 
             let redis_env = "REDIS_URL_ENV='redis://localhost:6379'";
             let db_env = format!(
                 "DB_URL_ENV='host={} user=postgres password=postgres dbname={} sslmode=disable'",
-                db_host, msg.proto_id
+                db_host, msg.proto
             );
 
             let _proto_handle = run_command_with_env(
@@ -130,6 +134,9 @@ fn process_message(msg: Message) -> Result<(), Box<dyn Error>> {
             //     ),
             //     Err(e) => eprintln!("ls command error: {}", e),
             // }
+        }
+        _ => {
+            eprintln!("error action type in this msg from redis.")
         }
     }
 
