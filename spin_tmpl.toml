@@ -1,0 +1,26 @@
+spin_manifest_version = 2
+
+# General identification information
+[application]
+name = "$proto_id"
+version = "1.0.0"
+description = ""
+
+[variables]
+redis_host = { required = true }  # will be filled out in ENV
+
+[[trigger.redis]]
+address = "redis://{{redis_host}}:6379"
+channel = "vin2worker:$proto_id"
+component = "proto_instance"
+
+[component.proto_instance]
+description = ""
+source = "proto_wasm_files/$proto_id-v$proto_version.wasm"
+
+[component.gutp.variables]
+redis_host = "{{ redis_host }}"
+
+# How to build the Wasm module from source
+[component.gutp.build]
+command = "cargo build --target wasm32-wasi --release"
