@@ -107,6 +107,7 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
 
             println!("Replacement complete. Check output file.");
 
+            // we have to set these two env variables
             let redis_host = std::env::var("REDIS_HOST")?;
             let db_host = std::env::var("DB_HOST")?;
 
@@ -115,7 +116,7 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
             env_vars.insert("SPIN_VARIABLE_REDIS_HOST".to_string(), redis_host.clone());
             env_vars.insert("SPIN_VARIABLE_PROTO_ID".to_string(), msg.proto.clone());
 
-            let redis_env = "REDIS_URL_ENV='redis://localhost:6379'";
+            let redis_env = format!("REDIS_URL_ENV='redis://{}:6379'", redis_host);
             let db_env = format!(
                 "DB_URL_ENV='host={} user=postgres password=postgres dbname={} sslmode=disable'",
                 db_host, msg.proto
@@ -126,6 +127,7 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
                 &["up", "-f", &path, "-e", &redis_env, "-e", &db_env],
                 env_vars,
             );
+
             // Don't join.
             // match proto_handle.join().expect("Thread panicked") {
             //     Ok(output) => println!(
