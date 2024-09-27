@@ -9,18 +9,24 @@ description = ""
 [variables]
 redis_host = { required = true }  # will be filled out in ENV
 
-[[trigger.redis]]
+[application.trigger.redis]
 address = "redis://{{redis_host}}:6379"
+
+[[trigger.redis]]
+channel = "vin2worker"
+component = "proto_instance"
+
+[[trigger.redis]]
 channel = "vin2worker:$proto_id"
 component = "proto_instance"
 
 [component.proto_instance]
 description = ""
-source = "proto_wasm_files/$proto_id-v$proto_version.wasm"
+source = "wasm_files/$proto_version.wasm"
 
-[component.gutp.variables]
+[component.proto_instance.variables]
 redis_host = "{{ redis_host }}"
 
 # How to build the Wasm module from source
-[component.gutp.build]
+[component.proto_instance.build]
 command = "cargo build --target wasm32-wasi --release"
