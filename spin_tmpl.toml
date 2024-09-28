@@ -8,6 +8,8 @@ description = ""
 
 [variables]
 redis_host = { required = true }  # will be filled out in ENV
+proto_id = { required = true }  # will be filled out in ENV
+wasm_hash = { required = true }  # will be filled out in ENV
 
 [application.trigger.redis]
 address = "redis://{{redis_host}}:6379"
@@ -22,10 +24,12 @@ component = "proto_instance"
 
 [component.proto_instance]
 description = ""
-source = "wasm_files/$proto_version.wasm"
+source = "wasm_files/$wasm_hash.wasm"
 
 [component.proto_instance.variables]
 redis_host = "{{ redis_host }}"
+proto_id = "{{ proto_id }}"
+wasm_hash = "{{ wasm_hash }}"
 
 # How to build the Wasm module from source
 [component.proto_instance.build]

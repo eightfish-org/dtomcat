@@ -103,9 +103,8 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
             // let info: Info = serde_json::from_str(&msg.model)?;
             let wasm_hash = hex::encode(msg.data);
             let proto = msg.proto;
-            let version = wasm_hash;
             // Define the replacements
-            let replacements = [("$proto_id", &proto), ("$proto_version", &version)];
+            let replacements = [("$proto_id", &proto), ("$wasm_hash", &wasm_hash)];
 
             // Perform the replacements
             let mut result = template;
@@ -114,7 +113,7 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
             }
 
             // generate a new intermediate spin config file
-            let path = format!("tmp_configs/{}-{}.toml", proto, version);
+            let path = format!("tmp_configs/{}-{}.toml", proto, wasm_hash);
             // Write the result to a new file
             let mut output_file = fs::File::create(&path)?;
             output_file.write_all(result.as_bytes())?;
@@ -128,7 +127,8 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
             // spawn new spin instance
             let mut env_vars = HashMap::new();
             env_vars.insert("SPIN_VARIABLE_REDIS_HOST".to_string(), redis_host.clone());
-            // env_vars.insert("SPIN_VARIABLE_PROTO_ID".to_string(), proto.clone());
+            env_vars.insert("SPIN_VARIABLE_PROTO_ID".to_string(), proto.clone());
+            env_vars.insert("SPIN_VARIABLE_WASM_HASH".to_string(), wasm_hash.clone());
 
             // let redis_env = "REDIS_URL_ENV='redis://localhost:6379'";
             let redis_env = format!("REDIS_URL_ENV='{redis_host}'");
@@ -143,7 +143,7 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
                 env_vars,
             );
             log::info!(
-                "on proto upgrade, the protocol {proto} has been upgraded to version: {version}."
+                "on proto upgrade, the protocol {proto} has been upgraded to version: {wasm_hash}."
             );
             // Don't join.
             // match proto_handle.join().expect("Thread panicked") {
