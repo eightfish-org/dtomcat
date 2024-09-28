@@ -3,20 +3,21 @@ spin_manifest_version = 2
 # General identification information
 [application]
 name = "$proto_id"
-version = "1.0.0"
+version = "0.2.0"
 description = ""
 
 [variables]
 redis_host = { required = true }  # will be filled out in ENV
+postgres_host = { required = true }  # will be filled out in ENV
 proto_id = { required = true }  # will be filled out in ENV
 wasm_hash = { required = true }  # will be filled out in ENV
 
 [application.trigger.redis]
-address = "redis://{{redis_host}}:6379"
+address = "redis://{{redis_host}}"
 
 [[trigger.redis]]
 channel = "vin2worker"
-component = "proto_instance"
+component = "proto-instance"
 
 [[trigger.redis]]
 channel = "vin2worker:$proto_id"
@@ -24,10 +25,14 @@ component = "proto-instance"
 
 [component.proto-instance]
 description = ""
-source = "wasm_files/$wasm_hash.wasm"
+source = "../wasm_files/$wasm_hash.wasm"
+## TODO: replace it in docker compose file
+# allowed_outbound_hosts = ["redis://localhost:6379", "postgres://localhost:5432"]
+allowed_outbound_hosts = ["redis://{{redis_host}}", "postgres://{{postgres_host}}"]
 
 [component.proto-instance.variables]
 redis_host = "{{ redis_host }}"
+postgres_host = "{{ postgres_host }}"
 proto_id = "{{ proto_id }}"
 wasm_hash = "{{ wasm_hash }}"
 

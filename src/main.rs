@@ -39,6 +39,7 @@ pub struct InputOutputObject {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
     let client = Client::open("redis://127.0.0.1/")?;
     let mut con = client.get_connection()?;
     let mut pubsub = con.as_pubsub();
@@ -54,7 +55,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match serde_json::from_str::<InputOutputObject>(&payload) {
             Ok(message) => {
-                println!("Received message: {:?}", message);
+                log::info!(
+                    "Received message: {} {} {} {} {}",
+                    message.action,
+                    message.proto,
+                    message.model,
+                    message.data.len(),
+                    message.ext.len()
+                );
                 process_message(message)?;
             }
             Err(e) => {
@@ -66,7 +74,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
-    println!("Processing message:");
+    // println!("Processing message: {:?}", msg);
 
     match &msg.action[..] {
         ACTION_NEW_BLOCK_HEIGHT => {
@@ -98,7 +106,7 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
             // if doesn't exist, return early
 
             // Read the template file
-            let template = fs::read_to_string("spin_tmpl.txt")?;
+            let template = fs::read_to_string("spin_tmpl.toml")?;
 
             // let info: Info = serde_json::from_str(&msg.model)?;
             let wasm_hash = hex::encode(msg.data);
@@ -127,13 +135,14 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
             // spawn new spin instance
             let mut env_vars = HashMap::new();
             env_vars.insert("SPIN_VARIABLE_REDIS_HOST".to_string(), redis_host.clone());
+            env_vars.insert("SPIN_VARIABLE_POSTGRES_HOST".to_string(), db_host.clone());
             env_vars.insert("SPIN_VARIABLE_PROTO_ID".to_string(), proto.clone());
             env_vars.insert("SPIN_VARIABLE_WASM_HASH".to_string(), wasm_hash.clone());
 
             // let redis_env = "REDIS_URL_ENV='redis://localhost:6379'";
-            let redis_env = format!("REDIS_URL_ENV='{redis_host}'");
+            let redis_env = format!("REDIS_URL_ENV=redis://{redis_host}");
             let db_env = format!(
-                "DB_URL_ENV='host={} user=postgres password=postgres dbname={} sslmode=disable'",
+                "DB_URL_ENV=postgresql://postgres:postgres@{}/{}?sslmode=disable",
                 db_host, proto
             );
 
@@ -146,13 +155,7 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
                 "on proto upgrade, the protocol {proto} has been upgraded to version: {wasm_hash}."
             );
             // Don't join.
-            // match proto_handle.join().expect("Thread panicked") {
-            //     Ok(output) => println!(
-            //         "ls command output:\n{}",
-            //         String::from_utf8_lossy(&output.stdout)
-            //     ),
-            //     Err(e) => eprintln!("ls command error: {}", e),
-            // }
+            _proto_handle.join().expect("Thread panicked");
         }
         _ => {
             log::error!("error action type in this msg from redis.");
@@ -177,14 +180,20 @@ fn run_command_with_env(
     command: &str,
     args: &[&str],
     env_vars: HashMap<String, String>,
-) -> thread::JoinHandle<std::io::Result<std::process::Output>> {
+) -> thread::JoinHandle<()> {
     let command = command.to_string();
     let args = args.iter().map(|&s| s.to_string()).collect::<Vec<String>>();
 
     thread::spawn(move || {
-        Command::new(command)
+        let mut child = Command::new(command)
             .args(&args)
             .envs(env_vars) // Set environment variables
-            .output()
+            // .output()
+            .spawn()
+            .expect("failed to execute child");
+
+        let ecode = child.wait().expect("failed to wait on child");
+
+        assert!(ecode.success());
     })
 }
