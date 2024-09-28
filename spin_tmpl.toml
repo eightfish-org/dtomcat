@@ -20,17 +20,17 @@ component = "proto_instance"
 
 [[trigger.redis]]
 channel = "vin2worker:$proto_id"
-component = "proto_instance"
+component = "proto-instance"
 
-[component.proto_instance]
+[component.proto-instance]
 description = ""
 source = "wasm_files/$wasm_hash.wasm"
 
-[component.proto_instance.variables]
+[component.proto-instance.variables]
 redis_host = "{{ redis_host }}"
 proto_id = "{{ proto_id }}"
 wasm_hash = "{{ wasm_hash }}"
 
 # How to build the Wasm module from source
-[component.proto_instance.build]
+[component.proto-instance.build]
 command = "cargo build --target wasm32-wasi --release"
