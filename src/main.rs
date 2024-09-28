@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::io::Write;
+use std::process::Child;
 use std::process::Command;
-use std::thread;
+// use std::thread;
 
 const CHANNEL_VIN2WORKER: &str = "vin2worker";
 
@@ -48,6 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     pubsub.subscribe(CHANNEL_VIN2WORKER)?;
 
     println!("Listening for messages on 'vin2worker'...");
+    let mut spin_tasks: HashMap<String, std::process::Child> = HashMap::new();
 
     loop {
         let msg = pubsub.get_message()?;
@@ -63,7 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     message.data.len(),
                     message.ext.len()
                 );
-                process_message(message)?;
+                process_message(message, &mut spin_tasks)?;
             }
             Err(e) => {
                 eprintln!("Failed to deserialize message: {}", e);
@@ -73,7 +75,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
+fn process_message(
+    msg: InputOutputObject,
+    spin_tasks: &mut HashMap<String, std::process::Child>,
+) -> Result<(), Box<dyn Error>> {
     // println!("Processing message: {:?}", msg);
 
     match &msg.action[..] {
@@ -146,16 +151,25 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
                 db_host, proto
             );
 
-            let _proto_handle = run_command_with_env(
+            // if already has an old version, kill first
+            if let Some(child) = spin_tasks.get_mut(&proto) {
+                log::info!("now try to kill old version of {proto}.");
+
+                // child.kill().expect("spin task: {proto} couldn't be killed");
+                send_ctrl_c(child)?;
+            }
+
+            // and then create new task process
+            let child = run_command_with_env(
                 "spin",
                 &["up", "-f", &path, "-e", &redis_env, "-e", &db_env],
                 env_vars,
             );
+            spin_tasks.insert(proto.clone(), child);
+
             log::info!(
                 "on proto upgrade, the protocol {proto} has been upgraded to version: {wasm_hash}."
             );
-            // Don't join.
-            _proto_handle.join().expect("Thread panicked");
         }
         _ => {
             log::error!("error action type in this msg from redis.");
@@ -165,35 +179,28 @@ fn process_message(msg: InputOutputObject) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[allow(dead_code)]
-fn run_command(
-    command: &str,
-    args: &[&str],
-) -> thread::JoinHandle<std::io::Result<std::process::Output>> {
-    let command = command.to_string();
-    let args = args.iter().map(|&s| s.to_string()).collect::<Vec<String>>();
-
-    thread::spawn(move || Command::new(command).args(&args).output())
-}
-
 fn run_command_with_env(
     command: &str,
     args: &[&str],
     env_vars: HashMap<String, String>,
-) -> thread::JoinHandle<()> {
+) -> std::process::Child {
     let command = command.to_string();
     let args = args.iter().map(|&s| s.to_string()).collect::<Vec<String>>();
 
-    thread::spawn(move || {
-        let mut child = Command::new(command)
-            .args(&args)
-            .envs(env_vars) // Set environment variables
-            // .output()
-            .spawn()
-            .expect("failed to execute child");
+    Command::new(command)
+        .args(&args)
+        .envs(env_vars) // Set environment variables
+        .spawn()
+        .expect("failed to execute child")
 
-        let ecode = child.wait().expect("failed to wait on child");
+    // let ecode = child.wait().expect("failed to wait on child");
+    // assert!(ecode.success());
+}
 
-        assert!(ecode.success());
-    })
+fn send_ctrl_c(child: &mut Child) -> Result<(), Box<dyn std::error::Error>> {
+    use nix::sys::signal::{kill, Signal};
+    use nix::unistd::Pid;
+
+    kill(Pid::from_raw(child.id() as i32), Signal::SIGINT)?;
+    Ok(())
 }

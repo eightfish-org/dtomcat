@@ -17,25 +17,25 @@ address = "redis://{{redis_host}}"
 
 [[trigger.redis]]
 channel = "vin2worker"
-component = "proto-instance"
+component = "$proto_id"
 
 [[trigger.redis]]
 channel = "vin2worker:$proto_id"
-component = "proto-instance"
+component = "$proto_id"
 
-[component.proto-instance]
+[component.$proto_id]
 description = ""
 source = "../wasm_files/$wasm_hash.wasm"
 ## TODO: replace it in docker compose file
 # allowed_outbound_hosts = ["redis://localhost:6379", "postgres://localhost:5432"]
 allowed_outbound_hosts = ["redis://{{redis_host}}", "postgres://{{postgres_host}}"]
 
-[component.proto-instance.variables]
+[component.$proto_id.variables]
 redis_host = "{{ redis_host }}"
 postgres_host = "{{ postgres_host }}"
 proto_id = "{{ proto_id }}"
 wasm_hash = "{{ wasm_hash }}"
 
 # How to build the Wasm module from source
-[component.proto-instance.build]
+[component.$proto_id.build]
 command = "cargo build --target wasm32-wasi --release"
