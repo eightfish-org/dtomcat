@@ -41,7 +41,8 @@ pub struct InputOutputObject {
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
-    let client = Client::open("redis://127.0.0.1/")?;
+    let redis_host = std::env::var("REDIS_HOST")?;
+    let client = Client::open(format!("redis://{redis_host}"))?;
     let mut con = client.get_connection()?;
     let mut pubsub = con.as_pubsub();
 
