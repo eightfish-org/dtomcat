@@ -7,7 +7,8 @@ use std::io::Write;
 use std::process::Child;
 use std::process::Command;
 // use std::thread;
-
+mod ef_icp;
+use ef_icp::ICHeartbeat;
 const CHANNEL_VIN2WORKER: &str = "vin2worker";
 
 // dtomcat action
@@ -89,6 +90,15 @@ fn process_message(
             let block_height = u64::from_be_bytes(body);
 
             // do something
+            if block_height % 500 == 0 {
+                //https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=yjj7c-kaaaa-aaaab-qaceq-cai
+                let canister_id = "yjj7c-kaaaa-aaaab-qaceq-cai";
+                let url = "https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io";
+                let identity_path = "./identity.pem";
+
+                let ic_heartbeat = ICHeartbeat::new(canister_id, url, identity_path)?;
+                ic_heartbeat.record_heartbeat("ef_main_500")?;
+            }
             log::info!("Block height: {block_height}");
         }
         ACTION_UPLOAD_WASM => {
@@ -105,6 +115,12 @@ fn process_message(
             let mut output_file = fs::File::create(&path)?;
             output_file.write_all(&wasm_binary)?;
 
+            let canister_id = "yjj7c-kaaaa-aaaab-qaceq-cai";
+            let url = "https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io";
+            let identity_path = "./identity.pem";
+
+            let ic_heartbeat = ICHeartbeat::new(canister_id, url, identity_path)?;
+            ic_heartbeat.register_protocol(&msg.proto)?;
             log::info!("on upload wasm, wasm file {path} saved.");
         }
         ACTION_UPGRADE_WASM => {

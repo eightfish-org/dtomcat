@@ -10,3 +10,4 @@ RUN mkdir -p /eightfish/wasm_files
 COPY ./spin /usr/local/bin
 COPY ./target/release/dtomcat /usr/local/bin
 COPY ./spin_tmpl.toml /eightfish/
+COPY ./identity.pem /eightfish/
