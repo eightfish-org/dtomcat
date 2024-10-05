@@ -91,12 +91,7 @@ fn process_message(
 
             // do something
             if block_height % 500 == 0 {
-                //https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=yjj7c-kaaaa-aaaab-qaceq-cai
-                let canister_id = "yjj7c-kaaaa-aaaab-qaceq-cai";
-                let url = "https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io";
-                let identity_path = "./identity.pem";
-
-                let ic_heartbeat = ICHeartbeat::new(canister_id, url, identity_path)?;
+                let ic_heartbeat = ICHeartbeat::new()?;
                 ic_heartbeat.record_heartbeat("ef_main_500")?;
             }
             log::info!("Block height: {block_height}");
@@ -115,11 +110,7 @@ fn process_message(
             let mut output_file = fs::File::create(&path)?;
             output_file.write_all(&wasm_binary)?;
 
-            let canister_id = "yjj7c-kaaaa-aaaab-qaceq-cai";
-            let url = "https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io";
-            let identity_path = "./identity.pem";
-
-            let ic_heartbeat = ICHeartbeat::new(canister_id, url, identity_path)?;
+            let ic_heartbeat = ICHeartbeat::new()?;
             ic_heartbeat.register_protocol(&msg.proto)?;
             log::info!("on upload wasm, wasm file {path} saved.");
         }

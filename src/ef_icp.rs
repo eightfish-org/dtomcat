@@ -13,6 +13,30 @@ pub struct ICHeartbeat {
 }
 
 impl ICHeartbeat {
+    const DEFAULT_CANISTER_ID: &'static str = "h4bqr-2qaaa-aaaaj-aztoa-cai";
+    const DEFAULT_URL: &'static str = "https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io";
+    const DEFAULT_IDENTITY_PATH: &'static str = "./identity.pem";
+
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        Self::new_with_config(Self::DEFAULT_CANISTER_ID, Self::DEFAULT_URL, Self::DEFAULT_IDENTITY_PATH)
+    }
+
+    pub fn new_with_config(canister_id: &str, url: &str, identity_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let runtime = Runtime::new()?;
+        let canister_id = Principal::from_text(canister_id)?;
+        let identity = Self::load_identity(identity_path)?;
+        let agent = Agent::builder()
+            .with_url(url)
+            .with_identity(identity)
+            .build()?;
+
+        runtime.block_on(async {
+            agent.fetch_root_key().await
+        })?;
+
+        Ok(Self { runtime, agent, canister_id })
+    }
+    /*
     pub fn new(canister_id: &str, url: &str, identity_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let runtime = Runtime::new()?;
         let canister_id = Principal::from_text(canister_id)?;
@@ -28,7 +52,7 @@ impl ICHeartbeat {
 
         Ok(Self { runtime, agent, canister_id })
     }
-
+    */
     fn load_identity(identity_path: &str) -> Result<impl Identity, Box<dyn std::error::Error>> {
         let pem_file = Path::new(identity_path);
         
