@@ -111,7 +111,7 @@ fn process_message(
             output_file.write_all(&wasm_binary)?;
 
             let ic_heartbeat = ICHeartbeat::new()?;
-            ic_heartbeat.register_protocol(&msg.proto)?;
+            ic_heartbeat.register_protocol(&wasm_hash)?;
             log::info!("on upload wasm, wasm file {path} saved.");
         }
         ACTION_UPGRADE_WASM => {
