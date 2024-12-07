@@ -110,8 +110,6 @@ fn process_message(
             let mut output_file = fs::File::create(&path)?;
             output_file.write_all(&wasm_binary)?;
 
-            let ic_heartbeat = ICHeartbeat::new()?;
-            ic_heartbeat.register_protocol(&wasm_hash)?;
             log::info!("on upload wasm, wasm file {path} saved.");
         }
         ACTION_UPGRADE_WASM => {
@@ -174,7 +172,8 @@ fn process_message(
                 env_vars,
             );
             spin_tasks.insert(proto.clone(), child);
-
+            let ic_heartbeat = ICHeartbeat::new()?;
+            ic_heartbeat.register_protocol(&proto)?;
             log::info!(
                 "on proto upgrade, the protocol {proto} has been upgraded to version: {wasm_hash}."
             );
