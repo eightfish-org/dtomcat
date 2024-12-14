@@ -172,11 +172,13 @@ fn process_message(
                 env_vars,
             );
             spin_tasks.insert(proto.clone(), child);
-            let ic_heartbeat = ICHeartbeat::new()?;
-            ic_heartbeat.register_protocol(&proto)?;
             log::info!(
                 "on proto upgrade, the protocol {proto} has been upgraded to version: {wasm_hash}."
             );
+
+            let ic_heartbeat = ICHeartbeat::new()?;
+            ic_heartbeat.register_protocol(&proto)?;
+            log::info!("register protocol to icp, name: {proto}");
         }
         _ => {
             log::error!("error action type in this msg from redis.");
