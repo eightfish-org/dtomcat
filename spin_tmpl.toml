@@ -8,7 +8,7 @@ description = ""
 
 [variables]
 redis_host = { required = true }  # will be filled out in ENV
-postgres_host = { required = true }  # will be filled out in ENV
+db_host = { required = true }  # will be filled out in ENV
 proto_id = { required = true }  # will be filled out in ENV
 wasm_hash = { required = true }  # will be filled out in ENV
 
@@ -28,14 +28,14 @@ description = ""
 source = "../wasm_files/$wasm_hash.wasm"
 ## TODO: replace it in docker compose file
 # allowed_outbound_hosts = ["redis://localhost:6379", "postgres://localhost:5432"]
-allowed_outbound_hosts = ["redis://{{redis_host}}", "postgres://{{postgres_host}}"]
+allowed_outbound_hosts = ["redis://{{redis_host}}", "postgres://{{db_host}}"]
 
 [component.$proto_id.variables]
 redis_host = "{{ redis_host }}"
-postgres_host = "{{ postgres_host }}"
+postgres_host = "{{ db_host }}"
 proto_id = "{{ proto_id }}"
 wasm_hash = "{{ wasm_hash }}"
 
 # How to build the Wasm module from source
-[component.$proto_id.build]
-command = "cargo build --target wasm32-wasi --release"
+# [component.$proto_id.build]
+# command = "cargo build --target wasm32-wasi --release"

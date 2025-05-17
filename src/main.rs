@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{RawQuery, State},
     http::{HeaderMap, Method, StatusCode},
     response::IntoResponse,
     routing::{delete, get, post, put},
@@ -17,7 +17,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+const REDIS_HOST: &str = "REDIS_HOST";
 const REDIS_URL: &str = "REDIS_URL";
+const DB_HOST: &str = "DB_HOST";
+const DB_URL: &str = "DB_URL";
 const CHANNEL_GATE2VIN: &str = "gate2vin";
 const CHANNEL_VIN2WORKER: &str = "vin2worker";
 pub(crate) const ACTION_NEW_BLOCK_HEIGHT: &str = "block_height";
@@ -42,6 +45,12 @@ pub struct InputOutputObject {
     ext: Vec<u8>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct BlockInfo {
+    block_height: u64,
+    block_hash: String,
+}
+
 #[derive(Clone)]
 struct AppState {
     redis_client: Client,
@@ -52,8 +61,8 @@ struct AppState {
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    let redis_host = std::env::var(REDIS_URL)?;
-    let redis_client = Client::open(format!("redis://{}", redis_host))?;
+    let redis_url = std::env::var(REDIS_URL)?;
+    let redis_client = Client::open(redis_url)?;
 
     // Initialize shared state
     let state = AppState {
@@ -127,12 +136,20 @@ async fn process_message(
 ) -> anyhow::Result<()> {
     match msg.action.as_str() {
         ACTION_NEW_BLOCK_HEIGHT => {
-            let body: [u8; 8] = msg
-                .data
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("Invalid data length"))?;
-            let block_height = u64::from_be_bytes(body);
-            log::info!("Block height: {}", block_height);
+            // log::info!("msgdata: {:?}", msg);
+            // Deserialize back to BlockInfo
+            let block_info: BlockInfo = serde_json::from_slice(&msg.data)?;
+
+            // let body: [u8; 8] = msg
+            //     .data
+            //     .try_into()
+            //     .map_err(|_| anyhow::anyhow!("Invalid data length"))?;
+            // let block_height = u64::from_be_bytes(body);
+            log::info!(
+                "Block height, hash: {} {}",
+                block_info.block_height,
+                block_info.block_hash
+            );
         }
         ACTION_UPLOAD_WASM => {
             let wasm_hash = hex::encode(&msg.data);
@@ -161,20 +178,19 @@ async fn process_message(
             output_file.write_all(result.as_bytes())?;
             log::info!("Generated spin config: {}", path);
 
-            let redis_host = std::env::var(REDIS_URL)?;
-            let db_host = std::env::var("DB_HOST")?;
+            let redis_host = std::env::var(REDIS_HOST)?;
+            let db_host = std::env::var(DB_HOST)?;
+            let redis_url = std::env::var(REDIS_URL)?;
+            let db_url = std::env::var(DB_URL)?.replace("#proto", proto);
+            let redis_env = format!("REDIS_URL={}", redis_url);
+            let db_env = format!("DB_URL={}", db_url);
+            log::info!("redis and db: {} {}", redis_env, db_env);
 
             let mut env_vars = HashMap::new();
             env_vars.insert("SPIN_VARIABLE_REDIS_HOST".to_string(), redis_host.clone());
-            env_vars.insert("SPIN_VARIABLE_POSTGRES_HOST".to_string(), db_host.clone());
+            env_vars.insert("SPIN_VARIABLE_DB_HOST".to_string(), db_host.clone());
             env_vars.insert("SPIN_VARIABLE_PROTO_ID".to_string(), proto.clone());
             env_vars.insert("SPIN_VARIABLE_WASM_HASH".to_string(), wasm_hash.clone());
-
-            let redis_env = format!("REDIS_URL=redis://{}", redis_host);
-            let db_env = format!(
-                "DB_URL=postgresql://postgres:postgres@{}/{}?sslmode=disable",
-                db_host, proto
-            );
 
             let mut spin_tasks = spin_tasks.lock().await;
             if let Some(child) = spin_tasks.get_mut(proto) {
@@ -223,9 +239,15 @@ fn parse_proto_name(path: &str) -> String {
 async fn handle_get(
     State(state): State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
-    Query(params): Query<HashMap<String, String>>,
+    RawQuery(query_string): RawQuery,
 ) -> impl IntoResponse {
-    let params_bytes: axum::body::Bytes = serde_json::to_vec(&params).unwrap_or_default().into();
+    let query_string = query_string.unwrap_or_default(); // Use empty string if None
+    log::info!("in handle_get: query_string: {}", query_string);
+
+    let params_bytes = axum::body::Bytes::from(query_string);
+    // // Optionally convert to bytes for your handler
+    // let params_bytes: axum::body::Bytes =
+    //     serde_json::to_vec(&query_string).unwrap_or_default().into();
     handle_request(Method::GET, &path, params_bytes, state).await
 }
 
@@ -248,8 +270,15 @@ async fn handle_put(
 async fn handle_delete(
     State(state): State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
+    RawQuery(query_string): RawQuery,
 ) -> impl IntoResponse {
-    handle_request(Method::DELETE, &path, axum::body::Bytes::new(), state).await
+    let query_string = query_string.unwrap_or_default(); // Use empty string if None
+
+    let params_bytes = axum::body::Bytes::from(query_string);
+    // // Optionally convert to bytes for your handler
+    // let params_bytes: axum::body::Bytes =
+    //     serde_json::to_vec(&query_string).unwrap_or_default().into();
+    handle_request(Method::DELETE, &path, params_bytes, state).await
 }
 
 async fn handle_options() -> impl IntoResponse {
@@ -280,13 +309,16 @@ where
     if proto_name.is_empty() {
         return (StatusCode::BAD_REQUEST, "proto_name is empty".to_string()).into_response();
     }
+    log::info!("in handle_request: method: {}", method);
+    log::info!("in handle_request: path: {}", path);
 
     let reqdata = reqdata.into();
     let reqdata_str = if !reqdata.is_empty() {
-        Some(String::from_utf8_lossy(&reqdata).to_string())
+        Some(String::from_utf8_lossy(&reqdata))
     } else {
         None
     };
+    log::info!("in handle_request: reqdata: {:?}", reqdata_str);
 
     let method_str = match method {
         Method::GET => "get",
