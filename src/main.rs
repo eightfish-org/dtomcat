@@ -110,14 +110,14 @@ async fn run_redis_listener(client: Client) -> anyhow::Result<()> {
         let payload: String = msg.get_payload()?;
         match serde_json::from_str::<InputOutputObject>(&payload) {
             Ok(message) => {
-                log::info!(
-                    "Received message: {} {} {} {} {}",
-                    message.action,
-                    message.proto,
-                    message.model,
-                    message.data.len(),
-                    message.ext.len()
-                );
+                // log::info!(
+                //     "Received message: {} {} {} {} {}",
+                //     message.action,
+                //     message.proto,
+                //     message.model,
+                //     message.data.len(),
+                //     message.ext.len()
+                // );
                 if let Err(e) = process_message(message, &spin_tasks).await {
                     log::error!("Error processing message: {}", e);
                 }
@@ -138,18 +138,18 @@ async fn process_message(
         ACTION_NEW_BLOCK_HEIGHT => {
             // log::info!("msgdata: {:?}", msg);
             // Deserialize back to BlockInfo
-            let block_info: BlockInfo = serde_json::from_slice(&msg.data)?;
+            let _block_info: BlockInfo = serde_json::from_slice(&msg.data)?;
 
             // let body: [u8; 8] = msg
             //     .data
             //     .try_into()
             //     .map_err(|_| anyhow::anyhow!("Invalid data length"))?;
             // let block_height = u64::from_be_bytes(body);
-            log::info!(
-                "Block height, hash: {} {}",
-                block_info.block_height,
-                block_info.block_hash
-            );
+            // log::info!(
+            //     "Block height, hash: {} {}",
+            //     block_info.block_height,
+            //     block_info.block_hash
+            // );
         }
         ACTION_UPLOAD_WASM => {
             let wasm_hash = hex::encode(&msg.data);
