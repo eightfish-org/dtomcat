@@ -270,15 +270,9 @@ async fn handle_put(
 async fn handle_delete(
     State(state): State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
-    RawQuery(query_string): RawQuery,
+    body: axum::body::Bytes,
 ) -> impl IntoResponse {
-    let query_string = query_string.unwrap_or_default(); // Use empty string if None
-
-    let params_bytes = axum::body::Bytes::from(query_string);
-    // // Optionally convert to bytes for your handler
-    // let params_bytes: axum::body::Bytes =
-    //     serde_json::to_vec(&query_string).unwrap_or_default().into();
-    handle_request(Method::DELETE, &path, params_bytes, state).await
+    handle_request(Method::DELETE, &path, body, state).await
 }
 
 async fn handle_options() -> impl IntoResponse {
