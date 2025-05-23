@@ -240,6 +240,7 @@ async fn handle_get(
     State(state): State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
     RawQuery(query_string): RawQuery,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
     let query_string = query_string.unwrap_or_default(); // Use empty string if None
     log::info!("in handle_get: query_string: {}", query_string);
@@ -248,31 +249,34 @@ async fn handle_get(
     // // Optionally convert to bytes for your handler
     // let params_bytes: axum::body::Bytes =
     //     serde_json::to_vec(&query_string).unwrap_or_default().into();
-    handle_request(Method::GET, &path, params_bytes, state).await
+    handle_request(Method::GET, &path, headers, params_bytes, state).await
 }
 
 async fn handle_post(
     State(state): State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
+    headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
-    handle_request(Method::POST, &path, body, state).await
+    handle_request(Method::POST, &path, headers, body, state).await
 }
 
 async fn handle_put(
     State(state): State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
+    headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
-    handle_request(Method::PUT, &path, body, state).await
+    handle_request(Method::PUT, &path, headers, body, state).await
 }
 
 async fn handle_delete(
     State(state): State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
+    headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
-    handle_request(Method::DELETE, &path, body, state).await
+    handle_request(Method::DELETE, &path, headers, body, state).await
 }
 
 async fn handle_options() -> impl IntoResponse {
@@ -293,6 +297,7 @@ async fn handle_options() -> impl IntoResponse {
 async fn handle_request<T>(
     method: Method,
     path: &str,
+    headers: HeaderMap,
     reqdata: T,
     state: AppState,
 ) -> impl IntoResponse
@@ -328,10 +333,23 @@ where
         }
     };
 
+    let headers_map: HashMap<String, String> = headers
+        .into_iter()
+        .filter_map(|(name, value)| {
+            name.map(|n| {
+                (
+                    n.as_str().to_string(),
+                    value.to_str().unwrap_or_default().to_string(),
+                )
+            })
+        })
+        .collect();
+
     let reqid = Uuid::new_v4().simple().to_string();
     let payload = json!({
         "reqid": reqid,
         "reqdata": reqdata_str,
+        "reqheaders": headers_map,
     });
 
     let json_to_send = json!({
