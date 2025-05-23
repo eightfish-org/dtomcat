@@ -1,6 +1,6 @@
 use axum::{
     extract::{RawQuery, State},
-    http::{HeaderMap, Method, StatusCode},
+    http::{self, HeaderMap, Method, StatusCode},
     response::IntoResponse,
     routing::{delete, get, post, put},
     Router,
@@ -285,7 +285,7 @@ async fn handle_options() -> impl IntoResponse {
     headers.insert("Access-Control-Allow-Origin", "*".parse().unwrap());
     headers.insert(
         "Access-Control-Allow-Methods",
-        "POST, GET, OPTIONS".parse().unwrap(),
+        "GET, POST, PUT, DELETE, OPTIONS".parse().unwrap(),
     );
     headers.insert(
         "Access-Control-Allow-Headers",
@@ -397,23 +397,38 @@ where
             .await
             .unwrap_or(None);
         if let Some(status_code) = status_code {
+            let res_headers: Option<Vec<u8>> = con
+                .get(format!("cache:headers:{}", reqid))
+                .await
+                .unwrap_or(None);
             let res_body: Option<Vec<u8>> =
                 con.get(format!("cache:{}", reqid)).await.unwrap_or(None);
+
+            // clear cache
             let _: () = con
                 .del(&[
                     format!("cache:status:{}", reqid),
+                    format!("cache:headers:{}", reqid),
                     format!("cache:{}", reqid),
                 ])
                 .await
                 .unwrap_or(());
 
             let status_code = String::from_utf8(status_code).unwrap_or("500".to_string());
-            let status_code = status_code.parse::<u16>().unwrap_or(500);
-            let res_body = res_body.unwrap_or_default();
+            let status_code = status_code.parse::<u16>().unwrap();
 
-            let mut headers = HeaderMap::new();
+            // processing response headers
+            let res_headers = res_headers.unwrap_or_default();
+            let headers: HashMap<String, String> =
+                serde_json::from_slice(&res_headers).expect("headers pasring error!");
+            let mut headers: HeaderMap = (&headers).try_into().expect("headers not valid.");
             headers.insert("ef-http-gate-version", "1.0".parse().unwrap());
-            headers.insert("Access-Control-Allow-Origin", "*".parse().unwrap());
+            headers.insert(
+                http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                "*".parse().unwrap(),
+            );
+
+            let res_body = res_body.unwrap_or_default();
 
             return (
                 StatusCode::from_u16(status_code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
@@ -425,7 +440,10 @@ where
 
         if loop_count >= 1000 {
             let mut headers = HeaderMap::new();
-            headers.insert("Access-Control-Allow-Origin", "*".parse().unwrap());
+            headers.insert(
+                http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                "*".parse().unwrap(),
+            );
             return (
                 StatusCode::REQUEST_TIMEOUT,
                 headers,
