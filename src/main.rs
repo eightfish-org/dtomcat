@@ -420,7 +420,7 @@ where
             // processing response headers
             let res_headers = res_headers.unwrap_or_default();
             let headers: HashMap<String, String> =
-                serde_json::from_slice(&res_headers).expect("headers pasring error!");
+                serde_json::from_slice(&res_headers).unwrap_or_default();
             let mut headers: HeaderMap = (&headers).try_into().expect("headers not valid.");
             headers.insert("ef-http-gate-version", "1.0".parse().unwrap());
             headers.insert(
