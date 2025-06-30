@@ -185,16 +185,37 @@ async fn process_message(
             let redis_env = format!("REDIS_URL={}", redis_url);
             let db_env = format!("DB_URL={}", db_url);
             log::info!("redis and db: {} {}", redis_env, db_env);
+            let outbound_host1 = std::env::var("OUTBOUND_HOST1")?;
+            let outbound_host2 = std::env::var("OUTBOUND_HOST2")?;
+            let outbound_host3 = std::env::var("OUTBOUND_HOST3")?;
 
             let mut env_vars = HashMap::new();
+            for (key, value) in std::env::vars() {
+                if key.starts_with("SPIN_ENV_") {
+                    println!("collecting env: {}: {}", key, value);
+                    env_vars.insert(key, value);
+                }
+            }
             env_vars.insert("SPIN_VARIABLE_REDIS_HOST".to_string(), redis_host.clone());
             env_vars.insert("SPIN_VARIABLE_DB_HOST".to_string(), db_host.clone());
             env_vars.insert("SPIN_VARIABLE_PROTO_ID".to_string(), proto.clone());
             env_vars.insert("SPIN_VARIABLE_WASM_HASH".to_string(), wasm_hash.clone());
+            env_vars.insert(
+                "SPIN_VARIABLE_OUTBOUND_HOST1".to_string(),
+                outbound_host1.clone(),
+            );
+            env_vars.insert(
+                "SPIN_VARIABLE_OUTBOUND_HOST2".to_string(),
+                outbound_host2.clone(),
+            );
+            env_vars.insert(
+                "SPIN_VARIABLE_OUTBOUND_HOST3".to_string(),
+                outbound_host3.clone(),
+            );
 
             let mut spin_tasks = spin_tasks.lock().await;
             if let Some(child) = spin_tasks.get_mut(proto) {
-                log::info!("Killing old version of {}", proto);
+                log::info!("Killing the old version of {}", proto);
                 send_ctrl_c(child)?;
             }
 
@@ -204,7 +225,7 @@ async fn process_message(
                 env_vars,
             );
             spin_tasks.insert(proto.clone(), child);
-            log::info!("Protocol {} upgraded to version: {}", proto, wasm_hash);
+            log::info!("Protocol {} has upgraded to version: {}", proto, wasm_hash);
         }
         _ => {
             log::error!("Unknown action type: {}", msg.action);

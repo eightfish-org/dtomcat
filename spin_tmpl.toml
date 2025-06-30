@@ -4,13 +4,16 @@ spin_manifest_version = 2
 [application]
 name = "$proto_id"
 version = "0.2.0"
-description = ""
+description = "the spin tmpl"
 
 [variables]
 redis_host = { required = true }  # will be filled out in ENV
 db_host = { required = true }  # will be filled out in ENV
 proto_id = { required = true }  # will be filled out in ENV
 wasm_hash = { required = true }  # will be filled out in ENV
+outbound_host1 = { required = true }  # will be filled out in ENV
+outbound_host2 = { required = true }  # will be filled out in ENV
+outbound_host3 = { required = true }  # will be filled out in ENV
 
 [application.trigger.redis]
 address = "redis://{{redis_host}}"
@@ -26,9 +29,13 @@ component = "$proto_id"
 [component.$proto_id]
 description = ""
 source = "../wasm_files/$wasm_hash.wasm"
-## TODO: replace it in docker compose file
-# allowed_outbound_hosts = ["redis://localhost:6379", "postgres://localhost:5432"]
-allowed_outbound_hosts = ["redis://{{redis_host}}", "postgres://{{db_host}}"]
+allowed_outbound_hosts = [
+  "redis://{{redis_host}}",
+  "postgres://{{db_host}}",
+  "{{outbound_host1}}",
+  "{{outbound_host2}}",
+  "{{outbound_host3}}"
+]
 
 [component.$proto_id.variables]
 redis_host = "{{ redis_host }}"
