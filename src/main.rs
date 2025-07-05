@@ -219,9 +219,25 @@ async fn process_message(
                 send_ctrl_c(child)?;
             }
 
+            let mut params_vec: Vec<String> = vec![];
+            params_vec.push("up".to_string());
+            params_vec.push("-f".to_string());
+            params_vec.push(path.clone());
+            params_vec.push("-e".to_string());
+            params_vec.push(redis_env.clone());
+            params_vec.push("-e".to_string());
+            params_vec.push(db_env.clone());
+            for (k, v) in env_vars.iter() {
+                params_vec.push("-e".to_string());
+                let envstr = format!("{}={}", k, v);
+                params_vec.push(envstr);
+            }
+            let ref_params_vec: Vec<&str> = params_vec.iter().map(|item| item.as_str()).collect();
+
             let child = run_command_with_env(
                 "spin",
-                &["up", "-f", &path, "-e", &redis_env, "-e", &db_env],
+                // &["up", "-f", &path, "-e", &redis_env, "-e", &db_env],
+                &ref_params_vec,
                 env_vars,
             );
             spin_tasks.insert(proto.clone(), child);
