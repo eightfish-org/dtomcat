@@ -319,16 +319,12 @@ async fn handle_delete(
 async fn handle_options() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert("ef-http-gate-version", "1.0".parse().unwrap());
-    headers.insert("Access-Control-Allow-Origin", "*".parse().unwrap());
+    add_cors_headers(&mut headers);
     headers.insert(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS".parse().unwrap(),
+        "Access-Control-Max-Age",
+        "86400".parse().unwrap(), // 24 hours
     );
-    headers.insert(
-        "Access-Control-Allow-Headers",
-        "X-PINGOTHER, Content-Type".parse().unwrap(),
-    );
-    (StatusCode::OK, headers, "No data")
+    (StatusCode::OK, headers, "")
 }
 
 async fn handle_request<T>(
@@ -343,7 +339,9 @@ where
 {
     let proto_name = parse_proto_name(path);
     if proto_name.is_empty() {
-        return (StatusCode::BAD_REQUEST, "proto_name is empty".to_string()).into_response();
+        let mut headers = HeaderMap::new();
+        add_cors_headers(&mut headers);
+        return (StatusCode::BAD_REQUEST, headers, "proto_name is empty".to_string()).into_response();
     }
     log::info!("in handle_request: method: {}", method);
     log::info!("in handle_request: path: {}", path);
@@ -401,8 +399,11 @@ where
         Ok(con) => con,
         Err(e) => {
             log::error!("Redis connection error: {}", e);
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
                 "Redis connection failed".to_string(),
             )
                 .into_response();
@@ -420,8 +421,11 @@ where
         .await
     {
         log::error!("Redis publish error: {}", e);
+        let mut headers = HeaderMap::new();
+        add_cors_headers(&mut headers);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
+            headers,
             "Failed to publish to Redis".to_string(),
         )
             .into_response();
@@ -460,10 +464,7 @@ where
                 serde_json::from_slice(&res_headers).unwrap_or_default();
             let mut headers: HeaderMap = (&headers).try_into().expect("headers not valid.");
             headers.insert("ef-http-gate-version", "1.0".parse().unwrap());
-            headers.insert(
-                http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                "*".parse().unwrap(),
-            );
+            add_cors_headers(&mut headers);
 
             let res_body = res_body.unwrap_or_default();
 
@@ -477,10 +478,7 @@ where
 
         if loop_count >= 1000 {
             let mut headers = HeaderMap::new();
-            headers.insert(
-                http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                "*".parse().unwrap(),
-            );
+            add_cors_headers(&mut headers);
             return (
                 StatusCode::REQUEST_TIMEOUT,
                 headers,
@@ -492,4 +490,23 @@ where
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         loop_count += 1;
     }
+}
+
+fn add_cors_headers(headers: &mut HeaderMap) {
+    headers.insert(
+        http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        "*".parse().unwrap(),
+    );
+    headers.insert(
+        "Access-Control-Allow-Credentials",
+        "true".parse().unwrap(),
+    );
+    headers.insert(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, DELETE, OPTIONS".parse().unwrap(),
+    );
+    headers.insert(
+        "Access-Control-Allow-Headers",
+        "X-PINGOTHER, Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, X-Api-Key".parse().unwrap(),
+    );
 }
